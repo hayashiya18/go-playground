@@ -7,7 +7,7 @@
 ;; URL: https://github.com/grafov/go-playground
 ;; Keywords: tools, golang
 ;; Version: 1.8.2
-;; Package-Requires: ((emacs "24") (go-mode "1.4.0") (gotest "0.13.0"))
+;; Package-Requires: ((emacs "24") (gotest "0.13.0"))
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -40,7 +40,13 @@
 
 ;;; Code:
 
-(require 'go-mode)
+;; go-mode or go-ts-mode is required for this package.
+(unless (or (require 'go-ts-mode nil t) (require 'go-mode nil t))
+    (error "go-mode or go-ts-mode is required for go-playground"))
+;; go-command is declared in go-mode but not in go-ts-mode.
+(unless (boundp 'go-command)
+  (setq go-command "go"))
+
 (require 'gotest)
 (require 'compile)
 (require 'time-stamp)
@@ -148,12 +154,12 @@ func main() {
 }
 ")
 	(backward-char 3)
-	(go-mode)
+    (go-playground--turn-on-go-major-mode)
 	(go-playground-mode)
 	(set-visited-file-name snippet-file-name t)))
 
 (defun go-playground-insert-template-head (description)
-  (insert "// -*- mode:go;mode:go-playground -*-
+  (insert "// -*- mode:" (if (eq (go-playground--use-major-mode-eval) 'go-mode) "go" "go-ts") ";mode:go-playground -*-
 // " description " @ " (time-stamp-string "%:y-%02m-%02d %02H:%02M:%02S") "
 
 // === Go Playground ===
@@ -202,7 +208,7 @@ Tries to look for a URL at point."
 	  (with-current-buffer buffer
 		(goto-char (point-min))
 		(go-playground-insert-template-head (concat url " imported"))
-		(go-mode)
+        (go-playground--turn-on-go-major-mode)
 		(go-playground-mode)
 		(set-visited-file-name snippet-file-name t)
 		(switch-to-buffer buffer)))))
@@ -228,6 +234,41 @@ Tries to look for a URL at point."
        buffer-file-name
        (string-prefix-p (file-truename go-playground-basedir)
 			(file-truename buffer-file-name))))
+
+(defcustom go-playground-use-major-mode 'auto
+  "Major mode to use for Go Playground.
+
+If set to 'auto, go-ts-mode will be used if available.
+If set to 'go-ts-mode, go-ts-mode will be used.
+If set to 'go-mode, go-mode will be used.
+"
+  :type '(choice (const :tag "Auto" auto)
+                 (const :tag "go-ts-mode" go-ts-mode)
+                 (const :tag "go-mode" go-mode))
+  :group 'go-playground)
+
+(defun go-playground--use-major-mode-eval ()
+  "Evaluate `go-playground-use-major-mode'."
+  (cond ((eq go-playground-use-major-mode 'auto)
+         (if (require 'go-ts-mode nil t)
+             'go-ts-mode
+           'go-mode))
+        ((eq go-playground-use-major-mode 'go-ts-mode)
+         'go-ts-mode)
+        ((eq go-playground-use-major-mode 'go-mode)
+         'go-mode)
+        (t
+         (error "Invalid value for `go-playground-use-major-mode'"))))
+
+(defun go-playground--turn-on-go-major-mode ()
+  "Turn on the major mode specified by `go-playground-use-major-mode'."
+  (let ((v (go-playground--use-major-mode-eval)))
+    (cond ((eq v 'go-ts-mode)
+           (go-ts-mode))
+          ((eq v 'go-mode)
+           (go-mode))
+          (t
+           (error "Invalid value for `go-playground-use-major-mode'")))))
 
 (provide 'go-playground)
 ;;; go-playground.el ends here
